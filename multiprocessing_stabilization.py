@@ -1,3 +1,10 @@
+"""
+Main script for the stabilization process using multiprocessing
+
+Author: Sanket Patil, Eli Slenders, 2024
+"""
+
+
 if __name__ == "__main__":
 
     from stabilization_process_functions import (
@@ -29,6 +36,7 @@ if __name__ == "__main__":
     from pi_stage_controller import send_axis_position, read_axis_position, pidevice
     from system_variables import get_path_for_csv, get_path_for_images, load_config, save_config
 
+    # boolean and fixed variables
     from system_variables import nPoints, plotting, data_saving, save_images, closed_loop_feedback
 
     from system_variables import (
@@ -73,12 +81,13 @@ if __name__ == "__main__":
         path_for_saving_csv = get_path_for_csv()
         path_for_saving_images = get_path_for_images()
 
-        # Pre stabilization initialization and Calibration
         """
+        Pre stabilization initialization and Calibration
         Getting position reading from PI Stage Controller
     
         Starting position of the stage to stabilize
         """
+
         position = read_axis_position()
 
         x_position = x_position_og = list(position.values())[0]
@@ -91,6 +100,18 @@ if __name__ == "__main__":
         )
 
         if load_from_config.lower()[0] == "y":
+
+            """
+            Load the configuration from the config file of the previous session
+            Values loaded are:
+            1. Exposure Time for XY Camera
+            2. Exposure Time for Z Camera
+            3. ROI for XY Camera
+            4. ROI for Z Camera
+            5. ROIs for tracking (Positions)
+            6. FFT Calibration value per nm
+            """
+
             print(Text_Color.DARKCYAN + "Loading Configuration from the configration file of the previous session" + Text_Color.END)
             print("\n")
             config_dict = load_config("config_dict.pkl")
@@ -118,6 +139,11 @@ if __name__ == "__main__":
             print(Text_Color.BOLD + Text_Color.GREEN + "Loading Configuration Complete" + Text_Color.END)
 
         elif load_from_config.lower()[0] == "n":
+            """
+            Re-calibration of the system
+            All values as mentioned above are recalibrated
+            """
+
             # reading the exposure time of the cameras
             exposure_time_xy, exposure_time_z = get_exposure_time()
 
@@ -138,6 +164,7 @@ if __name__ == "__main__":
                 get_fft_calibration_value(z_position=z_position, exposure_time_z=exposure_time_z, calibration_z_nm=50, num_z_points=5),
             )
 
+            # Save the configuration for the current session in a .pkl file
             config_dict: dict = {
                 "exposure_time_xy": exposure_time_xy,
                 "exposure_time_z": exposure_time_z,
@@ -178,6 +205,8 @@ if __name__ == "__main__":
         data_array_y = MemorySharedNumpyArray(shape=(nPoints, len(ROIs_xy)), dtype=np.float64, sampling=1)
         data_array_z = MemorySharedNumpyArray(shape=(nPoints, 1), dtype=np.float64, sampling=1)
 
+        # fill the arrays with nan values
+        # This is done to avoid problems with position average calculations
         data_array_x.get_numpy_handle().fill(np.nan)
         data_array_y.get_numpy_handle().fill(np.nan)
         data_array_z.get_numpy_handle().fill(np.nan)
@@ -186,9 +215,14 @@ if __name__ == "__main__":
         image_array_xy = MemorySharedNumpyArray(shape=(int(image_roi_xy[1]), int(image_roi_xy[0]), 25), dtype=np.int16, sampling=1)
         image_array_z = MemorySharedNumpyArray(shape=(int(image_roi_Z[1]), int(image_roi_Z[0]), 25), dtype=np.int16, sampling=1)
 
+        # fill the arrays with nan values
+        # Similar reason as above
         image_array_xy.get_numpy_handle().fill(np.nan)
         image_array_z.get_numpy_handle().fill(np.nan)
 
+        """
+        Shared memory variables and data saving queues for the stabilization main processes
+        """
         frame_counter_xy = mp.Value("i", 0)
         frame_counter_z = mp.Value("i", 0)
 
@@ -200,6 +234,11 @@ if __name__ == "__main__":
         data_for_saving_y_stage_position = mp.Queue()
         data_for_saving_z_stage_position = mp.Queue()
 
+        """
+        Defining all the processes for the stabilization
+        Processes are only defined here but not started
+        All the parameters are passed to the processes as arguments at this stage
+        """
         P1_xy_cam = mp.Process(
             target=camera_capture,
             args=(
@@ -334,6 +373,10 @@ if __name__ == "__main__":
 
         print("Starting all processes\n")
 
+        """ 
+        Starting the processes based on the user input
+        Each process is started in a separate try-except block to handle errors in a different memory space with shared data
+        """
         P1_xy_cam.start()
         P2_z_cam.start()
         P3_xy_calc.start()
@@ -345,6 +388,7 @@ if __name__ == "__main__":
         P9_image_saving.start() if save_images else None
         P10_frame_rate.start()
 
+        # Print the process codes for each process (for per process analysis (memory, CPU, kernel etc.) and debugging)
         print(f"XY Camera Process code: {Text_Color.GREEN}{P1_xy_cam.pid}{Text_Color.END}")
         print(f"Z Camera Process code: {Text_Color.GREEN}{P2_z_cam.pid}{Text_Color.END}")
         print(f"XY Calculation Process code: {Text_Color.GREEN}{P3_xy_calc.pid}{Text_Color.END}")
@@ -360,9 +404,13 @@ if __name__ == "__main__":
 
         start_time = perf_counter()
 
-        # DO NOT DELETE THE FOLLOWING LINES
-        # This is to keep the main process running until the program is stopped
-        # If these lines are deleted, the program will stop immediately after starting
+        """
+        DO NOT DELETE THE FOLLOWING LINES
+        This is to keep the main process running until the program is stopped
+        If these lines are deleted, the program will stop immediately after starting
+        Because the processes are not inherently persistent and the processes will stop after the last line of code
+        """
+
         while stabilization_stop_event.is_set() is False:
             sleep(10)
 
@@ -376,6 +424,7 @@ if __name__ == "__main__":
         stabilization_stop_event.set()
         print(Text_Color.RED + "Stopping all processes\n" + Text_Color.END)
 
+        # Joining all processes for a graceful exit [Based on hope - there is no graceful kill in multiprocessing]
         P1_xy_cam.join()
         P2_z_cam.join()
         P3_xy_calc.join()
@@ -389,9 +438,15 @@ if __name__ == "__main__":
 
     finally:
 
+        """
+        Exit handler
+        Is executed whenever the program is stopped - Function call is not required
+        """
+
         @atexit.register
         def exit_handler():
 
+            # Hard termination of all processes - stops the stabilization processes
             print(Text_Color.RED + "Terminating all processes\n" + Text_Color.END)
             P1_xy_cam.terminate()
             P2_z_cam.terminate()
