@@ -1,3 +1,3 @@
 # Active Stabilization
 
-hsdkljfhlkajshdvlkjabsdmnf bakl;sjdh bfgmkn.asbdlvkjhg asm.kndbvf lkjas gbdv
+Active 3D Stabilization: Open source code for active 3D stabilization using multiprocessing
