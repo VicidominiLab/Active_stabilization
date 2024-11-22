@@ -1,10 +1,26 @@
+"""
+File containing te functions for the stabilization process - Each function is a separate process
+The functions are:
+    1. Camera Capture (for XY and Z Cameras)
+    2. Local Gradients Calculation for XY Camera
+    3. Local Gradients Calculation for Z Camera
+    4. Stage Update
+    5. Plotting Update
+    6. Save Particle Position Data
+    7. Save Stage Position Data
+    8. Save Camera Images
+    9. Frame Rate Calculation
+
+Author: Sanket Patil, Eli Slenders, 2024
+"""
+
 import multiprocessing as mp
 
 # Local Imports
 from particle_detector import ParticleDetector
-from mp_shared_array import MemorySharedNumpyArray
+from mp_shared_array import MemorySharedNumpyArray  # provides shared memory array for multiprocessing
 
-
+# Color class for text color in the terminal (for fun)
 class Text_Color:
     PURPLE = "\033[95m"
     CYAN = "\033[96m"
@@ -19,6 +35,7 @@ class Text_Color:
 
 
 # Initializing the position calculation function
+# function is defined in another function wrapper to initialize all the constant inputs
 def position_calc(img):
     return ParticleDetector().get_multi_trajectory(img, thr=2, R=15, epsilon=3, minpts=7)
 
@@ -34,7 +51,9 @@ def camera_capture(
 ) -> None:
     """
     Capture the images from the Thorlabs Camera
-    @param serial: Serial number of the camera (Thorlabs) (str)
+    Process started separately for each camera
+
+    @param serial: Serial number of the camera (Thorlabs) (str) - Mostly all thorlabs camera can be used as long as it can be controlled using the Thorlabs python API
     @param exposure_time: Exposure time for the camera (float)
     @param shared_image_data: Shared memory array for the image data (MemorySharedNumpyArray)
     @param frame_counter: Frame counter for the camera (mp.Value)
@@ -61,6 +80,7 @@ def camera_capture(
         while stop_event.is_set() is False:
             cam.wait_for_frame()  # wait for the next available frame
             img = cam.read_newest_image()
+            # locking the shared memory array for writing the image data
             shared_image_data.get_lock().acquire()
             image_data[:, :, frame_counter.value % 25] = img
             frame_counter.value += 1
@@ -68,6 +88,7 @@ def camera_capture(
                 process_start_switch.set()
             frame_ready_event.set()
             shared_image_data.get_lock().release()
+            # release the lock after writing the data
 
     except (Exception, TimeoutError, KeyboardInterrupt) as ex:
         # stop_event.set()
@@ -89,6 +110,7 @@ def local_gradients_calculation_xy(
 ) -> None:
     """
     Calculate the local gradients for the XY camera
+
     @param shared_image_array: Shared memory array for the image data
     @param ROIs_xy: 'Region of Interests' for the XY camera
     @param shared_array_x: Shared memory array for the X axis position data
@@ -142,6 +164,8 @@ def local_gradients_calculation_xy(
                     """img_crop = img_raw[y1:y1 + y2, x1:x1 + x2]"""
                     img_roi_lst = [final_image[ROI[1] : ROI[3] + ROI[1], ROI[0] : ROI[2] + ROI[0]] for ROI in ROIs_xy]
 
+                    # mapping the position calculation function to the image ROIs
+                    # creates more sub-processes to handle the parallel processing of each particle
                     if internal_counter_xy == 0:
                         xy_coord_new = xy_coord_0 = np.array(pool.map(position_calc, img_roi_lst))
                     else:
@@ -165,6 +189,7 @@ def local_gradients_calculation_xy(
                         buffer_array_x[internal_counter_xy, :] = (xy_coord_new[:, 1] - xy_coord_0[:, 1]) * pixel_to_nm_conv
                         buffer_array_y[internal_counter_xy, :] = (xy_coord_new[:, 0] - xy_coord_0[:, 0]) * pixel_to_nm_conv
 
+                    # saving the time for each position calculation for later analysis
                     dt = datetime.now().strftime("%H_%M_%S_%f")
                     if internal_counter_xy >= nPoints:
                         data_saving_x.put([dt, *buffer_array_x[-1]])
@@ -201,8 +226,27 @@ def local_gradients_calculation_xy(
 
 
 def calculate_astigmatism_for_z(
-    shared_image_array, shared_array_z, frame_count, data_saving_z, process_start_switch, z_frame_ready_event, stop_event
+    shared_image_array: MemorySharedNumpyArray,
+    shared_array_z: MemorySharedNumpyArray,
+    frame_count: mp.Value,
+    data_saving_z: mp.Queue,
+    process_start_switch: mp.Event,
+    z_frame_ready_event: mp.Event,
+    stop_event: mp.Event,
 ) -> None:
+    """
+    Calculate the astigmatism for the Z camera
+
+    @param shared_image_array: Shared memory array for the Z camera image data
+    @param shared_array_z: Shared memory array for the Z camera position data - post astigmatism calculation
+    @param frame_count: Frame counter for the Z camera
+    @param data_saving_z: Saving queue for the Z camera position data
+    @param process_start_switch: Process start switch for the Z camera
+    @param z_frame_ready_event: Frame ready event for the Z camera
+    @param stop_event: Stop event for the Z camera
+
+    @return: None
+    """
 
     import numpy as np
     from datetime import datetime
@@ -266,20 +310,40 @@ def calculate_astigmatism_for_z(
 
 
 def stage_update(
-    shared_array_x,
-    shared_array_y,
-    shared_array_z,
-    x_position_start,
-    y_position_start,
-    z_position_start,
-    data_saving_x,
-    data_saving_y,
-    data_saving_z,
-    calibration_value,
-    process_start_switch_xy,
-    process_start_switch_z,
-    stop_event,
+    shared_array_x: MemorySharedNumpyArray,
+    shared_array_y: MemorySharedNumpyArray,
+    shared_array_z: MemorySharedNumpyArray,
+    x_position_start: float,
+    y_position_start: float,
+    z_position_start: float,
+    data_saving_x: mp.Queue,
+    data_saving_y: mp.Queue,
+    data_saving_z: mp.Queue,
+    calibration_value: float,
+    process_start_switch_xy: mp.Event,
+    process_start_switch_z: mp.Event,
+    stop_event: mp.Event,
 ) -> None:
+
+    """
+    Update the stage position based on the calculated particle positions - Drift correction
+
+    @param shared_array_x: Shared memory array for the X axis position data
+    @param shared_array_y: Shared memory array for the Y axis position data
+    @param shared_array_z: Shared memory array for the Z axis position data
+    @param x_position_start: Initial X position of the stage
+    @param y_position_start: Initial Y position of the stage
+    @param z_position_start: Initial Z position of the stage
+    @param data_saving_x: Saving queue for the X axis position data
+    @param data_saving_y: Saving queue for the Y axis position data
+    @param data_saving_z: Saving queue for the Z axis position data
+    @param calibration_value: Calibration value for the Z axis - to convert the Z position astigmatism to nm
+    @param process_start_switch_xy: Process start switch for the XY camera - Imported to check is camera capturing has started
+    @param process_start_switch_z: Process start switch for the Z camera - Imported to check is camera capturing has started
+    @param stop_event: Stop event for the stage update process
+
+    @return: None
+    """
 
     import numpy as np
     from time import sleep
@@ -339,19 +403,31 @@ def stage_update(
 
 
 def plotting_update(
-    shared_array_x,
-    shared_array_y,
-    shared_array_z,
-    calibration_value,
-    update_time,
-    process_start_switch_xy,
-    process_start_switch_z,
-    stop_event,
+    shared_array_x: MemorySharedNumpyArray,
+    shared_array_y: MemorySharedNumpyArray,
+    shared_array_z: MemorySharedNumpyArray,
+    calibration_value: float,
+    update_time: float,
+    process_start_switch_xy: mp.Event,
+    process_start_switch_z: mp.Event,
+    stop_event: mp.Event,
 ) -> None:
     """
     Plotting Parameters
 
     Making a plot gird for plotting the XY and Z coordinates
+    The plot is updated in real-time
+
+    @param shared_array_x: Shared memory array for the X axis position data
+    @param shared_array_y: Shared memory array for the Y axis position data
+    @param shared_array_z: Shared memory array for the Z axis position data
+    @param calibration_value: Calibration value for the Z axis - to convert the Z position astigmatism to nm
+    @param update_time: Time interval for updating the plot
+    @param process_start_switch_xy: Process start switch for the XY camera - Imported to check is camera capturing has started
+    @param process_start_switch_z: Process start switch for the Z camera - Imported to check is camera capturing has started
+    @param stop_event: Stop event for the plotting process
+
+    @return: None
     """
 
     import numpy as np
@@ -477,7 +553,22 @@ def plotting_update(
         print("Plotting Stopped\n" f"Error -> {repr(ex)}\n")
 
 
-def save_particle_position_data(position_data_x, position_data_y, position_data_z, num_particles_xy, path_for_csv, stop_event) -> None:
+def save_particle_position_data(
+    position_data_x: mp.Queue, position_data_y: mp.Queue, position_data_z: mp.Queue, num_particles_xy: int, path_for_csv: str, stop_event
+) -> None:
+
+    """
+    Save the particle position data to a CSV file - including the timestamps of the data
+
+    @param position_data_x: Queue for the X axis particle position data
+    @param position_data_y: Queue for the Y axis particle position data
+    @param position_data_z: Queue for the Z axis particle position data
+    @param num_particles_xy: Number of particles detected in the XY camera
+    @param path_for_csv: Path for saving the CSV files
+    @param stop_event: Stop event for the process
+
+    @return: None
+    """
 
     import numpy as np
     import pandas as pd
@@ -531,7 +622,21 @@ def save_particle_position_data(position_data_x, position_data_y, position_data_
         print(f"Extra Data Saved for Particle positions\n")
 
 
-def save_stage_position_data(position_data_x, position_data_y, position_data_z, path_for_csv, stop_event) -> None:
+def save_stage_position_data(
+    position_data_x: mp.Queue, position_data_y: mp.Queue, position_data_z: mp.Queue, path_for_csv: str, stop_event: mp.Event
+) -> None:
+
+    """
+    Save the stage position data to a CSV file - including the timestamps of the data
+
+    @param position_data_x: Queue for the X axis stage position data
+    @param position_data_y: Queue for the Y axis stage position data
+    @param position_data_z: Queue for the Z axis stage position data
+    @param path_for_csv: Path for saving the CSV files
+    @param stop_event: Stop event for the process
+
+    @return: None
+    """
 
     import numpy as np
     import pandas as pd
@@ -630,7 +735,13 @@ def save_camera_images(shared_image_array_xy, shared_image_array_z, path_for_ima
         print(f"Image Saving Stopped\n" f"Error -> {repr(ex)}\n")
 
 
-def frame_rate_calculation(frame_counter_xy, frame_counter_z, process_start_switch_xy, process_start_switch_z, stop_event) -> None:
+def frame_rate_calculation(
+        frame_counter_xy: mp.Value,
+        frame_counter_z: mp.Value,
+        process_start_switch_xy: mp.Event,
+        process_start_switch_z: mp.Event,
+        stop_event: mp.Event,
+) -> None:
 
     from time import perf_counter
 
