@@ -24,4 +24,4 @@ It requires the following Python packages
 
 All the specific versions of the packages are mentioned and can be installed from the "requirements.txt" file. All packages can be directly installed using the command 
 
-        pip install -r requirements.txt 
+    pip install -r requirements.txt 
