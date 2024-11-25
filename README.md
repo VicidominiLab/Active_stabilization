@@ -33,11 +33,11 @@ During the installation of Thorcam software, the user will be asked to choose th
 1) ![image](https://github.com/user-attachments/assets/7adcc652-dea9-464e-85d2-d551166c8d85)
 
 
-The user then should select the USB option and select "Entire feature will be installed on local hard drive" (Image 2)
+The user then should select the "_USB_" option and select "_Entire feature will be installed on local hard drive_" (Image 2)
 
 2) ![image](https://github.com/user-attachments/assets/95e02cdc-3e70-4fee-ac45-14bbb77908b9)
 
-Finally, the user should do the same for the "Camera Link" option (Image 3). After this, the user can proceed with the installation of the software.
+Finally, the user should do the same for the "_Camera Link_" option (Image 3). After this, the user can proceed with the installation of the software.
 
 3) ![image](https://github.com/user-attachments/assets/7e356a86-0457-4a4b-9e20-a0106d315264)
 
