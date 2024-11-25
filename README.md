@@ -22,4 +22,6 @@ It requires the following Python packages
     scipy
     tqdm
 
-All the specific versions of the packages are mentioned and can be installed from the "requirements.txt" file.
+All the specific versions of the packages are mentioned and can be installed from the "requirements.txt" file. All packages can be directly installed using the command 
+
+        pip install -r requirements.txt 
