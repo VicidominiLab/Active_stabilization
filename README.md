@@ -10,15 +10,16 @@ The software does not require an installation process to function.
 The software required prerequisites for functioning properly.
 It requires the following Python packages
 
-    joblib
     matplotlib
+    numba (required for JIT compiling numpy)
     numpy
+    opencv_python
     pandas
-    Pillow
-    pylablib
-    pyserial
+    PIPython (PI piezo stage)
+    psutil
+    pylablib (Thorlabs camera control)
+    scikit_learn
+    scipy
     tqdm
-    pipython
-    opencv-python
 
 All the specific versions of the packages are mentioned and can be installed from the "requirements.txt" file.
