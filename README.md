@@ -86,4 +86,11 @@ Details for each step are given below:
 	After the requirements, Install the Thorcam and piMikroMove software as mentioned in [Requirements](https://github.com/VicidominiLab/Active_stabilization/edit/main/README.md#requirements)
 
 
+4) After installing the requirements, run the "_req_test.py_" file to perform the checks for all the requirements using the command:
+
+ 		python req_test.py
+
+
+5) Finally run the main file........
+
 
