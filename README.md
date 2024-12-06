@@ -91,6 +91,10 @@ Details for each step are given below:
  		python req_test.py
 
 
-5) Finally run the main file........
+5) Finally, if there are no errors, proceed running the main stabilization script to start the active stabilization:
+
+   		python stabilization_main.py
+
+   
 
 
