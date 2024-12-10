@@ -131,11 +131,11 @@ def local_gradients_calculation_xy(
 
     from system_variables import nPoints, pixel_to_nm_conv, weights_for_average, array_shift_2d
 
-    internal_counter_xy = 0
+    internal_counter_xy = frame_rate_counter = 0
     weight_array = weights_for_average(scaling_factor=2, num_points=25)
 
     print("Position Calculation for XY Camera Started")
-    zero_time_xy = start_time_xy = perf_counter()
+    zero_time_xy = perf_counter()
 
     print(f"Number of processors available: {multiprocessing.cpu_count()}\n")
 
@@ -214,8 +214,9 @@ def local_gradients_calculation_xy(
 
                 if perf_counter() - zero_time_xy > 30:
                     print(
-                        f"Average XY calculation rate = {Text_Color.YELLOW}{internal_counter_xy / (perf_counter() - start_time_xy):.2f}{Text_Color.END} FPS"
+                        f"Average XY calculation rate = {Text_Color.YELLOW}{(internal_counter_xy - frame_rate_counter) / (perf_counter() - zero_time_xy):.2f}{Text_Color.END} FPS"
                     )
+                    frame_rate_counter = internal_counter_xy
                     zero_time_xy = perf_counter()
 
     except (Exception, KeyboardInterrupt) as ex:
@@ -254,11 +255,11 @@ def calculate_astigmatism_for_z(
 
     from system_variables import calculate_astigmatism, array_shift, weights_for_average, nPoints
 
-    internal_counter_z = 0
+    internal_counter_z = frame_rate_counter_z = 0
     weight_array = weights_for_average(scaling_factor=2, num_points=25)
     print("Astigmatism Calculation for Z Camera Started")
 
-    zero_time_z = start_time_z = perf_counter()
+    zero_time_z = perf_counter()
 
     try:
         while stop_event.is_set() is False:
@@ -300,8 +301,9 @@ def calculate_astigmatism_for_z(
 
             if perf_counter() - zero_time_z > 30:
                 print(
-                    f"Average Z calculation rate = {Text_Color.BLUE}{internal_counter_z / (perf_counter() - start_time_z):.2f}{Text_Color.END} FPS"
+                    f"Average Z calculation rate = {Text_Color.BLUE}{(internal_counter_z - frame_rate_counter_z) / (perf_counter() - zero_time_z):.2f}{Text_Color.END} FPS"
                 )
+                frame_rate_counter_z = internal_counter_z
                 zero_time_z = perf_counter()
 
     except (Exception, KeyboardInterrupt) as ex:
@@ -736,28 +738,35 @@ def save_camera_images(shared_image_array_xy, shared_image_array_z, path_for_ima
 
 
 def frame_rate_calculation(
-        frame_counter_xy: mp.Value,
-        frame_counter_z: mp.Value,
-        process_start_switch_xy: mp.Event,
-        process_start_switch_z: mp.Event,
-        stop_event: mp.Event,
+    frame_counter_xy: mp.Value,
+    frame_counter_z: mp.Value,
+    process_start_switch_xy: mp.Event,
+    process_start_switch_z: mp.Event,
+    stop_event: mp.Event,
 ) -> None:
 
     from time import perf_counter
 
     zero_time = start_time = perf_counter()
 
+    old_frame_count_xy = 0
+    old_frame_count_z = 0
+    old_time = start_time
+
     try:
         while stop_event.is_set() is False:
             if process_start_switch_xy.is_set() and process_start_switch_z.is_set() and (perf_counter() - zero_time) > 30:
                 print(
-                    f"\nFrame Rate XY = {Text_Color.YELLOW}{frame_counter_xy.value / (perf_counter() - start_time):.2f}{Text_Color.END} FPS"
-                    f" | Frame Rate Z = {Text_Color.BLUE}{frame_counter_z.value / (perf_counter() - start_time):.2f}{Text_Color.END} FPS"
+                    f"\nFrame Rate XY = {Text_Color.YELLOW}{(frame_counter_xy.value - old_frame_count_xy)  / (perf_counter() - old_time):.2f}{Text_Color.END} FPS"
+                    f" | Frame Rate Z = {Text_Color.BLUE}{(frame_counter_z.value - old_frame_count_z) / (perf_counter() - old_time):.2f}{Text_Color.END} FPS"
                     f" | Frame Count XY = {Text_Color.YELLOW}{frame_counter_xy.value}{Text_Color.END}"
                     f" | Frame Count Z = {Text_Color.BLUE}{frame_counter_z.value}{Text_Color.END}"
                     f" | Time = {Text_Color.CYAN}{perf_counter() - start_time:.2f}{Text_Color.END} sec"
                 )
-                zero_time = perf_counter()
+
+                old_frame_count_xy = frame_counter_xy.value
+                old_frame_count_z = frame_counter_z.value
+                old_time = zero_time = perf_counter()
 
     except (Exception, KeyboardInterrupt) as ex:
         # stop_event.set()

@@ -7,6 +7,7 @@ Author: Sanket Patil, Eli Slenders, 2024
 
 if __name__ == "__main__":
 
+    # all the functions are imported here
     from stabilization_process_functions import (
         camera_capture,
         local_gradients_calculation_xy,
@@ -326,7 +327,7 @@ if __name__ == "__main__":
                 data_array_y,
                 data_array_z,
                 fft_calib_value_per_nm.value,
-                0.1,  # seconds
+                0.1,  # update value of data plotting graph in seconds
                 process_start_switch_xy,
                 process_start_switch_z,
                 stabilization_stop_event,
