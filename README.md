@@ -91,9 +91,18 @@ Details for each step are given below:
  		python req_test.py
 
 
-5) Finally, if there are no errors, proceed running the main stabilization script to start the active stabilization:
+5) Finally, if there are no errors, proceed to run the main stabilization script to start the active stabilization:
 
    		python stabilization_main.py
+
+
+## Code Execution
+
+The code can be executed on any OS (Windows, Linux, Mac) and in any terminal program (Powershell, console emulator, terminal). It has been developed on Windows and tested in Powershell - which is what we recommend to run the code with.
+The execution of the scripts is shown in the videos below
+
+1) Execution without loading from the configuration file:- [Without_config.webm](https://github.com/user-attachments/assets/e62e7e1c-ca4e-402b-a874-8ce409bddd9c)
+
 
    
 
