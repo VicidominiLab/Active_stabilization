@@ -98,7 +98,7 @@ Details for each step are given below:
 
 ## Code Execution
 
-The code can be executed on any OS (Windows, Linux, Mac) and in any terminal program (Powershell, console emulator, terminal). It has been developed on Windows and tested in Powershell - which we recommend running the code with.
+The code can be executed on Windows in any terminal program (Powershell, console emulator, terminal). It has been developed on Windows and tested in Powershell - which we recommend running the code with.
 The execution of the scripts is shown in the videos below
 
 1) Execution **without** loading from the configuration file:- [Without_config.webm](https://github.com/user-attachments/assets/e62e7e1c-ca4e-402b-a874-8ce409bddd9c)
